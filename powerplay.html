@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>FTC POWERPLAY – Drag & Drop (Local 2P)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root{
+    --bg:#0f1115; --panel:#1b1f2a; --ink:#e9eef7; --muted:#9aa6b2;
+    --red:#e23c39; --blue:#2b7de9;
+    --ground:#69d24b; --low:#f4c542; --med:#f79033; --high:#ff38a5;
+  }
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .wrap{display:grid;grid-template-columns:280px 1fr 280px;grid-template-rows:auto 1fr;gap:16px;height:100%;padding:16px;box-sizing:border-box}
+  header{grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:24px}
+  header .score{display:flex;gap:18px;align-items:center}
+  header .score span{font-weight:700}
+  header .score .red{color:var(--red)}
+  header .score .blue{color:var(--blue)}
+  header .timer{font-weight:800;font-size:18px;padding:6px 10px;border-radius:10px;background:#222b3b}
+  header .controls{display:flex;gap:8px}
+  button{background:#253049;color:var(--ink);border:1px solid #33405c;border-radius:10px;padding:8px 12px;font-weight:700;cursor:pointer}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .panel{background:var(--panel);border:1px solid #2b354c;border-radius:14px;padding:16px}
+  .panel h2{margin:0 0 10px;font-size:16px;font-weight:800}
+  .supply{display:flex;flex-direction:column;gap:12px}
+  .supply .row{display:flex;align-items:center;gap:12px}
+  .supply .count{min-width:36px;text-align:right;font-weight:800}
+  .selectable{cursor:grab;user-select:none; transition:opacity .15s ease}
+  .selectable.disabled{filter:grayscale(1); opacity:.45; cursor:not-allowed}
+  .legend{margin-top:18px;border-top:1px dashed #3a4662;padding-top:12px}
+  .legend .row{display:flex;align-items:center;gap:12px;margin:6px 0}
+  .boardwrap{display:flex;align-items:center;justify-content:center}
+  svg{background:#2a2f3d;border-radius:14px;border:2px solid #404a64}
+  .gridline{stroke:#0c0f16;stroke-width:2}
+  .label{fill:#d6deec;font-weight:700;font-size:13px;opacity:.9}
+  .valshape{stroke:#111826;stroke-width:2}
+  .droptarget{fill:transparent}
+  .hitHL{fill:rgba(255,255,255,.08);stroke:#8fb3ff;stroke-width:2}
+  .piece{pointer-events:none}
+  .ptext{fill:#fff;font-weight:800;pointer-events:none}
+  .sep{pointer-events:none}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:#10151f;color:#fff;border:1px solid #2f3a54;padding:10px 14px;border-radius:10px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="score">
+      <span class="red">Red:</span> <span id="score-red">0</span>
+      <span class="blue" style="margin-left:20px">Blue:</span> <span id="score-blue">0</span>
+    </div>
+    <div class="timer" id="timer">02:00</div>
+    <div class="controls">
+      <button id="start">Start</button>
+      <button id="pause" disabled>Pause</button>
+      <button id="resume" disabled>Resume</button>
+      <button id="reset">Reset</button>
+    </div>
+  </header>
+
+  <!-- Left supply (Red) -->
+  <aside class="panel">
+    <h2>Red Supply</h2>
+    <div class="supply">
+      <div class="row selectable" id="row-red-cone" data-color="red" data-type="cone">
+        <svg width="44" height="18" viewBox="0 0 44 18">
+          <rect x="2" y="2" width="40" height="14" rx="2" fill="var(--red)" stroke="#111826" stroke-width="2"/>
+        </svg>
+        <div class="count" id="count-red-cone">30</div>
+        <div>Cones</div>
+      </div>
+      <div class="row selectable" id="row-red-beacon" data-color="red" data-type="beacon">
+        <svg width="44" height="22" viewBox="0 0 44 22">
+          <path d="M4,18 A18,18 0 0 1 40,18" fill="var(--red)" stroke="#111826" stroke-width="2"/>
+        </svg>
+        <div class="count" id="count-red-beacon">2</div>
+        <div>Beacons</div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <h2>Legend</h2>
+      <div class="row">
+        <svg width="22" height="22"><circle cx="11" cy="11" r="9" fill="var(--ground)" class="valshape"/></svg>
+        Ground (2)
+      </div>
+      <div class="row">
+        <svg width="22" height="22"><polygon points="11,3 20,19 2,19" fill="var(--low)" class="valshape"/></svg>
+        Low (3)
+      </div>
+      <div class="row">
+        <svg width="22" height="22"><polygon points="11,2 19,7 19,15 11,20 3,15 3,7" fill="var(--med)" class="valshape"/></svg>
+        Medium (4)
+      </div>
+      <div class="row">
+        <svg width="22" height="22"><rect x="5" y="5" width="12" height="12" transform="rotate(45 11 11)" fill="var(--high)" class="valshape"/></svg>
+        High (5)
+      </div>
+      <div class="row">
+        <svg width="22" height="22"><polygon points="11,2 18,6.5 18,15.5 11,20 4,15.5 4,6.5" fill="#9aa6b2" class="valshape"/></svg>
+        Terminal (1)
+      </div>
+    </div>
+  </aside>
+
+  <!-- Board -->
+  <main class="boardwrap">
+    <svg id="board" width="720" height="720" viewBox="0 0 700 700" aria-label="Board">
+      <g id="g-static"></g>
+      <g id="g-pieces"></g>
+      <g id="g-hits"></g>
+      <g id="g-drag"></g>
+    </svg>
+  </main>
+
+  <!-- Right supply (Blue) -->
+  <aside class="panel">
+    <h2>Blue Supply</h2>
+    <div class="supply">
+      <div class="row selectable" id="row-blue-cone" data-color="blue" data-type="cone">
+        <svg width="44" height="18" viewBox="0 0 44 18">
+          <rect x="2" y="2" width="40" height="14" rx="2" fill="var(--blue)" stroke="#111826" stroke-width="2"/>
+        </svg>
+        <div class="count" id="count-blue-cone">30</div>
+        <div>Cones</div>
+      </div>
+      <div class="row selectable" id="row-blue-beacon" data-color="blue" data-type="beacon">
+        <svg width="44" height="22" viewBox="0 0 44 22">
+          <path d="M4,18 A18,18 0 0 1 40,18" fill="var(--blue)" stroke="#111826" stroke-width="2"/>
+        </svg>
+        <div class="count" id="count-blue-beacon">2</div>
+        <div>Beacons</div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ==== Config ==== */
+const BOARD_SIZE = 7;
+const CELL = 100;
+const ORIGIN = 50;
+const BEACON_POINTS = 10;
+const CONTROL_POINTS = 3;
+const LAST_30_ENABLED = true;
+
+/* center 5×5 value pattern */
+const valuePattern = [
+  [2,3,2,3,2],
+  [3,4,5,4,3],
+  [2,5,2,5,2],
+  [3,4,5,4,3],
+  [2,3,2,3,2],
+];
+
+const svg = document.getElementById('board');
+const gStatic = document.getElementById('g-static');
+const gPieces = document.getElementById('g-pieces');
+const gHits   = document.getElementById('g-hits');
+const gDrag   = document.getElementById('g-drag');
+const toastEl = document.getElementById('toast');
+
+const state = {
+  supplies:{ red:{cone:30,beacon:2}, blue:{cone:30,beacon:2} },
+  nodes:[], // [y][x]
+  dragging:false,
+  selection:null, // {type,color}
+  dragEl:null,
+  dragOver:{x:null,y:null},
+  timeLeft:120, timerId:null,
+  beaconsUnlocked:false,
+  gameOver:false,
+  started:false
+};
+
+function xyToPx(x){ return ORIGIN + x*CELL; }
+function getCSS(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function timeFmt(s){const m=Math.floor(s/60),r=s%60;return `${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`;}
+function toast(msg){toastEl.textContent=msg;toastEl.classList.add('show');setTimeout(()=>toastEl.classList.remove('show'),1100);}
+
+/* Build nodes */
+function makeNode(x,y){
+  const isCorner=(x===0||x===6)&&(y===0||y===6);
+  const n={x,y,kind:'junction',value:2,terminalColor:null,counts:{red:0,blue:0},topColor:null,beacon:null};
+  if(isCorner){
+    n.kind='terminal'; n.value=1;
+    n.terminalColor=((x===0&&y===0)||(x===6&&y===6))?'blue':'red';
+  }else if(x>=1&&x<=5&&y>=1&&y<=5){ n.value=valuePattern[y-1][x-1]; }
+  else n.value=2;
+  return n;
+}
+for(let y=0;y<BOARD_SIZE;y++){ const row=[]; for(let x=0;x<BOARD_SIZE;x++){ row.push(makeNode(x,y)); } state.nodes.push(row); }
+
+/* ====== Static board ====== */
+function drawStatic(){
+  gStatic.innerHTML='';
+  for(let i=0;i<BOARD_SIZE;i++){
+    gStatic.appendChild(line(xyToPx(i),xyToPx(0),xyToPx(i),xyToPx(6),'gridline'));
+    gStatic.appendChild(line(xyToPx(0),xyToPx(i),xyToPx(6),xyToPx(i),'gridline'));
+  }
+  const letters='ABCDEFG'.split('');
+  for(let i=0;i<BOARD_SIZE;i++) gStatic.appendChild(lbl(xyToPx(i), xyToPx(6)+28, letters[i]));
+  for(let i=0;i<BOARD_SIZE;i++){const num=i+1,y=xyToPx(6-i); gStatic.appendChild(lbl(xyToPx(-0.35), y, String(num)));}
+
+  for(let y=0;y<BOARD_SIZE;y++){
+    for(let x=0;x<BOARD_SIZE;x++){
+      const n=state.nodes[y][x], cx=xyToPx(x), cy=xyToPx(y);
+      if(n.kind==='terminal'){
+        const col= n.terminalColor==='red'?getCSS('--red'):getCSS('--blue');
+        gStatic.appendChild(hex(cx,cy,22,col));
+      }else if(x>=1&&x<=5&&y>=1&&y<=5){
+        const v=n.value;
+        if(v===2) gStatic.appendChild(circle(cx,cy,18,getCSS('--ground')));
+        if(v===3) gStatic.appendChild(tri(cx,cy,22,getCSS('--low')));
+        if(v===4) gStatic.appendChild(hex(cx,cy,20,getCSS('--med')));
+        if(v===5) gStatic.appendChild(diamond(cx,cy,18,getCSS('--high')));
+      }
+    }
+  }
+  drawHits();
+}
+function drawHits(){
+  gHits.innerHTML='';
+  for(let y=0;y<BOARD_SIZE;y++){
+    for(let x=0;x<BOARD_SIZE;x++){
+      const cx=xyToPx(x), cy=xyToPx(y);
+      gHits.appendChild(rect(cx-30, cy-30, 60, 60, 'droptarget'));
+    }
+  }
+}
+function renderHitHL(){
+  gHits.querySelectorAll('.hitHL').forEach(n=>n.remove());
+  const {x,y}=state.dragOver; if(x==null||y==null) return;
+  gHits.appendChild(rect(xyToPx(x)-28, xyToPx(y)-28, 56, 56, 'hitHL'));
+}
+
+/* ====== Pieces layer ====== */
+function renderPieces(){
+  gPieces.innerHTML='';
+  for(let y=0;y<BOARD_SIZE;y++){
+    for(let x=0;x<BOARD_SIZE;x++){
+      const n=state.nodes[y][x];
+      const cx=xyToPx(x), cy=xyToPx(y);
+      const red=n.counts.red, blue=n.counts.blue, hasBeacon=!!n.beacon;
+      if(red===0 && blue===0 && !hasBeacon) continue;
+
+      const blocks=[];
+      if(red>0 || blue>0){
+        if(!n.topColor){
+          if(red>0) blocks.push({color:'red',count:red});
+          if(blue>0) blocks.push({color:'blue',count:blue});
+        }else{
+          const top=n.topColor, bot=top==='red'?'blue':'red';
+          if(n.counts[bot]>0) blocks.push({color:bot,count:n.counts[bot]});
+          if(n.counts[top]>0) blocks.push({color:top,count:n.counts[top]});
+        }
+      }
+
+      let yTop = cy - 11;
+      blocks.forEach(b=>{
+        const fill = b.color==='red'?getCSS('--red'):getCSS('--blue');
+        const r = rect(cx-30, yTop, 60, 22, 'piece');
+        r.setAttribute('fill', fill); r.setAttribute('stroke','#111826'); r.setAttribute('stroke-width',2); r.setAttribute('rx',4);
+        gPieces.appendChild(r);
+        const t = txt(cx, yTop+11, String(b.count), 'ptext'); gPieces.appendChild(t);
+        yTop -= 22;
+      });
+
+      if(hasBeacon){
+        const lastConeTop = (blocks.length ? (yTop + 22) : (cy - 11));
+        const GAP = 2;
+        const sep = rect(cx-27, lastConeTop - GAP, 54, GAP, 'sep'); sep.setAttribute('fill','#ffffff');
+        gPieces.appendChild(sep);
+        const color = n.beacon==='red'?getCSS('--red'):getCSS('--blue');
+        const dome = domeUpPath(cx, lastConeTop - GAP, 28, color); dome.classList.add('piece');
+        gPieces.appendChild(dome);
+      }
+    }
+  }
+}
+
+/* ====== Placement ====== */
+function canPlaceAt(sel,x,y){
+  const n=state.nodes[y][x];
+  if(state.gameOver || !state.started) return [false,'Not during this phase'];
+  if(n.kind==='terminal' && n.terminalColor!==sel.color) return [false,'Cannot place on opponent terminal'];
+  if(n.beacon) return [false,'This junction is capped'];
+  if(sel.type==='beacon' && !state.beaconsUnlocked && LAST_30_ENABLED) return [false,'Beacons in last 30s'];
+  if(state.supplies[sel.color][sel.type]<=0) return [false,'No pieces left'];
+  return [true,''];
+}
+function placeAt(sel,x,y){
+  const n=state.nodes[y][x];
+  if(sel.type==='beacon'){
+    n.beacon=sel.color;
+    state.supplies[sel.color].beacon--;
+  }else{
+    n.counts[sel.color]+=1;
+    n.topColor = sel.color;
+    state.supplies[sel.color].cone--;
+  }
+  syncSupplies(); renderPieces(); updateScores();
+}
+
+/* ====== Drag & drop with SNAP ====== */
+function mkGhost(sel){
+  gDrag.innerHTML='';
+  let el;
+  if(sel.type==='cone'){
+    const color = sel.color==='red'?getCSS('--red'):getCSS('--blue');
+    el = rect(-1000,-1000,60,22,'piece'); el.setAttribute('fill',color); el.setAttribute('stroke','#111826'); el.setAttribute('stroke-width',2); el.setAttribute('rx',4);
+  }else{
+    const color = sel.color==='red'?getCSS('--red'):getCSS('--blue');
+    el = domeUpPath(-1000,-1000,28,color); el.classList.add('piece');
+  }
+  gDrag.appendChild(el);
+  return el;
+}
+function startDrag(sel){
+  if(state.gameOver || !state.started) return;
+  // additional guard: deny beacons before unlock
+  if(sel.type==='beacon' && !state.beaconsUnlocked) return;
+  if(state.supplies[sel.color][sel.type]<=0) return;
+  state.selection=sel; state.dragging=true; state.dragEl = mkGhost(sel);
+}
+function endDrag(commit=false){
+  if(commit && state.dragOver.x!=null){
+    const [ok,msg]=canPlaceAt(state.selection,state.dragOver.x,state.dragOver.y);
+    if(ok) placeAt(state.selection,state.dragOver.x,state.dragOver.y);
+    else toast(msg);
+  }
+  state.dragging=false; state.dragEl=null; state.dragOver={x:null,y:null};
+  gDrag.innerHTML=''; renderHitHL();
+}
+
+/* ====== Supply UI enable/disable ====== */
+function setRowEnabled(rowEl, enabled){
+  rowEl.classList.toggle('disabled', !enabled);
+}
+function refreshSupplyInteractivity(){
+  const phase = state.started && !state.gameOver;
+  const conesEnabled   = phase;                         // cones enabled whenever game running
+  const beaconsEnabled = phase && (state.beaconsUnlocked || !LAST_30_ENABLED);
+
+  // red
+  setRowEnabled(document.getElementById('row-red-cone'),
+    conesEnabled && state.supplies.red.cone>0);
+  setRowEnabled(document.getElementById('row-red-beacon'),
+    beaconsEnabled && state.supplies.red.beacon>0);
+
+  // blue
+  setRowEnabled(document.getElementById('row-blue-cone'),
+    conesEnabled && state.supplies.blue.cone>0);
+  setRowEnabled(document.getElementById('row-blue-beacon'),
+    beaconsEnabled && state.supplies.blue.beacon>0);
+}
+
+function syncSupplies(){
+  document.getElementById('count-red-cone').textContent = state.supplies.red.cone;
+  document.getElementById('count-red-beacon').textContent = state.supplies.red.beacon;
+  document.getElementById('count-blue-cone').textContent = state.supplies.blue.cone;
+  document.getElementById('count-blue-beacon').textContent = state.supplies.blue.beacon;
+  refreshSupplyInteractivity();
+}
+
+/* supply mousedown -> drag (only if enabled) */
+document.querySelectorAll('.selectable').forEach(row=>{
+  row.addEventListener('mousedown', (e)=>{
+    e.preventDefault();
+    if(row.classList.contains('disabled')) return;
+    const sel = {color:row.dataset.color, type:row.dataset.type};
+    startDrag(sel);
+  });
+});
+
+/* --- Snap logic --- */
+const SNAP_RADIUS = 40;
+function snapToNearest(pt){
+  let ix = Math.round((pt.x - ORIGIN)/CELL);
+  let iy = Math.round((pt.y - ORIGIN)/CELL);
+  ix = Math.max(0, Math.min(BOARD_SIZE-1, ix));
+  iy = Math.max(0, Math.min(BOARD_SIZE-1, iy));
+  const cx = xyToPx(ix), cy = xyToPx(iy);
+  const dist = Math.hypot(pt.x - cx, pt.y - cy);
+  state.dragOver = (dist <= SNAP_RADIUS) ? {x:ix,y:iy} : {x:null,y:null};
+  renderHitHL();
+}
+
+/* global mousemove/mouseup for dragging */
+document.addEventListener('mousemove', (e)=>{
+  if(!state.dragging || !state.dragEl) return;
+  const pt = clientToSvg(e.clientX,e.clientY);
+  if(state.selection.type==='cone'){
+    state.dragEl.setAttribute('x', pt.x-30);
+    state.dragEl.setAttribute('y', pt.y-11);
+  }else{
+    state.dragEl.setAttribute('d', `M ${pt.x-28},${pt.y} A 28,28 0 0 1 ${pt.x+28},${pt.y}`);
+  }
+  snapToNearest(pt);
+});
+document.addEventListener('mouseup', (e)=>{
+  if(!state.dragging) return;
+  const pt = clientToSvg(e.clientX,e.clientY);
+  snapToNearest(pt);
+  endDrag(true);
+});
+
+/* convert page coords to SVG coords */
+function clientToSvg(cx,cy){
+  const pt=svg.createSVGPoint(); pt.x=cx; pt.y=cy;
+  const m = svg.getScreenCTM().inverse();
+  return pt.matrixTransform(m);
+}
+
+/* ====== Timer / controls ====== */
+const tEl = document.getElementById('timer');
+document.getElementById('start').addEventListener('click', ()=>{
+  if(state.timerId) return;
+  state.started=true; state.gameOver=false; state.timeLeft=120;
+  tick(true);
+  document.getElementById('pause').disabled=false;
+  document.getElementById('start').disabled=true;
+  refreshSupplyInteractivity();
+});
+document.getElementById('pause').addEventListener('click', ()=>{
+  if(!state.timerId) return; clearInterval(state.timerId); state.timerId=null;
+  document.getElementById('resume').disabled=false; document.getElementById('pause').disabled=true;
+});
+document.getElementById('resume').addEventListener('click', ()=>{
+  if(state.timerId) return; tick(false);
+  document.getElementById('resume').disabled=true; document.getElementById('pause').disabled=false;
+});
+document.getElementById('reset').addEventListener('click', resetGame);
+
+function tick(reset){
+  // (Re)start the countdown loop
+  if (reset) state.beaconsUnlocked = false;
+
+  // Make sure supply rows reflect current phase
+  refreshSupplyInteractivity();
+
+  // Clear any existing timer
+  if (state.timerId) clearInterval(state.timerId);
+
+  // Create a new 1s interval
+  state.timerId = setInterval(() => {
+    state.timeLeft--;
+
+    // Unlock beacons in the last 30s (if that rule is on)
+    if (LAST_30_ENABLED && state.timeLeft <= 30 && !state.beaconsUnlocked) {
+      state.beaconsUnlocked = true;
+      refreshSupplyInteractivity();
+    }
+
+    // Update timer text each tick
+    document.getElementById('timer').textContent = timeFmt(state.timeLeft);
+
+    // Time's up → finalize game, freeze inputs, add control bonus
+    if (state.timeLeft <= 0) {
+      clearInterval(state.timerId);
+      state.timerId = null;
+
+      state.gameOver = true;
+      state.started  = false;
+
+      // Header buttons reflect finished state
+      document.getElementById('pause').disabled  = true;
+      document.getElementById('resume').disabled = true;
+
+      // Grey out supplies after game ends
+      refreshSupplyInteractivity();
+
+      // Recompute including control bonus at end
+      updateScores();
+
+      toast('Time! Control bonus added.');
+    }
+  }, 1000);
+
+  // Initialize the timer text immediately (no 1s delay)
+  document.getElementById('timer').textContent = timeFmt(state.timeLeft);
+}
+
+
+function resetGame(){
+  // clear board
+  for (let y=0; y<BOARD_SIZE; y++) for (let x=0; x<BOARD_SIZE; x++) {
+    const n = state.nodes[y][x];
+    n.counts.red = 0; n.counts.blue = 0; n.topColor = null; n.beacon = null;
+  }
+
+  // reset supplies & flags
+  state.supplies = { red:{cone:30, beacon:2}, blue:{cone:30, beacon:2} };
+  state.selection = null;
+  state.dragging = false;
+  state.dragEl = null;
+  state.dragOver = {x:null, y:null};
+
+  if (state.timerId){ clearInterval(state.timerId); state.timerId = null; }
+  state.timeLeft = 120;
+  state.beaconsUnlocked = false;
+  state.gameOver = false;
+  state.started = false;
+
+  // UI: restore buttons for a fresh start
+  document.getElementById('start').disabled  = false; // <-- enable Start
+  document.getElementById('pause').disabled  = true;  // <-- Pause only after start
+  document.getElementById('resume').disabled = true;  // <-- Resume only after pause
+  document.getElementById('timer').textContent = timeFmt(state.timeLeft);
+
+  // redraw & grey supplies until Start is pressed
+  renderPieces();
+  syncSupplies();
+  updateScores();
+  refreshSupplyInteractivity();
+}
+
+
+/* ====== Score (adds control bonus when gameOver) ====== */
+function updateScores(){
+  let red=0, blue=0;
+  for(let y=0;y<BOARD_SIZE;y++){
+    for(let x=0;x<BOARD_SIZE;x++){
+      const n=state.nodes[y][x];
+      red  += n.counts.red  * n.value;
+      blue += n.counts.blue * n.value;
+      if(n.beacon==='red')  red  += BEACON_POINTS;
+      if(n.beacon==='blue') blue += BEACON_POINTS;
+    }
+  }
+  if(state.gameOver){
+    for(let y=0;y<BOARD_SIZE;y++){
+      for(let x=0;x<BOARD_SIZE;x++){
+        const n=state.nodes[y][x];
+        if(n.kind==='terminal') continue;
+        if(n.beacon) continue;
+        if((n.counts.red+n.counts.blue)>0 && n.topColor){
+          if(n.topColor==='red')  red  += CONTROL_POINTS;
+          if(n.topColor==='blue') blue += CONTROL_POINTS;
+        }
+      }
+    }
+  }
+  document.getElementById('score-red').textContent=red;
+  document.getElementById('score-blue').textContent=blue;
+}
+
+/* ====== SVG primitives ====== */
+function line(x1,y1,x2,y2,cls){const el=doc('line');el.setAttribute('x1',x1);el.setAttribute('y1',y1);el.setAttribute('x2',x2);el.setAttribute('y2',y2);el.setAttribute('class',cls);return el;}
+function lbl(x,y,txt){const el=doc('text');el.setAttribute('x',x);el.setAttribute('y',y+4);el.setAttribute('text-anchor','middle');el.setAttribute('class','label');el.textContent=txt;return el;}
+function circle(cx,cy,r,fill){const el=doc('circle');el.setAttribute('cx',cx);el.setAttribute('cy',cy);el.setAttribute('r',r);el.setAttribute('fill',fill);el.setAttribute('class','valshape');return el;}
+function tri(cx,cy,s,fill){const el=doc('polygon');const p1=`${cx},${cy-s*0.45}`,p2=`${cx+s*0.52},${cy+s*0.45}`,p3=`${cx-s*0.52},${cy+s*0.45}`;el.setAttribute('points',`${p1} ${p2} ${p3}`);el.setAttribute('fill',fill);el.setAttribute('class','valshape');return el;}
+function hex(cx,cy,r,fill){const el=doc('polygon');const pts=[];for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3;pts.push(`${cx+r*Math.cos(a)},${cy+r*Math.sin(a)}`);}el.setAttribute('points',pts.join(' '));el.setAttribute('fill',fill);el.setAttribute('stroke','#111826');el.setAttribute('stroke-width',2);return el;}
+function diamond(cx,cy,r,fill){const el=doc('rect');el.setAttribute('x',cx-r);el.setAttribute('y',cy-r);el.setAttribute('width',2*r);el.setAttribute('height',2*r);el.setAttribute('transform',`rotate(45 ${cx} ${cy})`);el.setAttribute('fill',fill);el.setAttribute('class','valshape');return el;}
+function rect(x,y,w,h,cls){const el=doc('rect');el.setAttribute('x',x);el.setAttribute('y',y);el.setAttribute('width',w);el.setAttribute('height',h);if(cls)el.setAttribute('class',cls);return el;}
+function txt(x,y,txtStr,cls){const el=doc('text');el.setAttribute('x',x);el.setAttribute('y',y+3);el.setAttribute('text-anchor','middle');if(cls)el.setAttribute('class',cls);el.textContent=txtStr;return el;}
+function domeUpPath(cx,base,r,fill){
+  const el=doc('path');
+  el.setAttribute('d',`M ${cx-r},${base} A ${r},${r} 0 0 1 ${cx+r},${base}`);
+  el.setAttribute('fill',fill); el.setAttribute('stroke','#111826'); el.setAttribute('stroke-width',2);
+  return el;
+}
+function doc(tag){return document.createElementNS('http://www.w3.org/2000/svg',tag);}
+
+/* boot */
+drawStatic(); renderPieces(); syncSupplies(); updateScores();
+document.getElementById('timer').textContent=timeFmt(state.timeLeft);
+// Initially everything disabled/greyed
+refreshSupplyInteractivity();
+</script>
+</body>
+</html>
